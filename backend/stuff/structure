@@ -1,0 +1,21 @@
+certificate_verifier/
+├── core/
+│   ├── __init__.py
+│   ├── models.py          # Pydantic schemas
+│   └── config.py          # Settings
+├── ocr/
+│   ├── __init__.py
+│   ├── base.py            # Base OCR interface
+│   ├── paddle_ocr.py      # PaddleOCR wrapper
+│   ├── easy_ocr.py        # EasyOCR wrapper
+│   └── normalizer.py      # Output standardization
+├── reasoning/
+│   ├── __init__.py
+│   └── mistral_agent.py   # Mistral integration
+├── verification/
+│   ├── __init__.py
+│   └── agent.py           # Verification logic
+├── pipeline/
+│   ├── __init__.py
+│   └── orchestrator.py    # Main flow controller
+└── main.py

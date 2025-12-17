@@ -1,0 +1,9 @@
+paddleocr
+easyocr
+mistralai
+pydantic
+opencv-python
+pdf2image
+requests
+pillow
+python-dotenv

@@ -1,0 +1,17 @@
+Input (PDF/Image)
+   ↓
+Image Normalization
+   ↓
+Parallel OCR
+   ├─ PaddleOCR
+   └─ EasyOCR
+   ↓
+Normalize OCR Outputs
+   ↓
+Mistral Reasoning (separate)
+   ↓
+Evidence Pool
+   ↓
+Verification Agent
+   ↓
+Final Verdict + Explanation
