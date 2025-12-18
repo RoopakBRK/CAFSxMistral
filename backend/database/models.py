@@ -5,6 +5,7 @@ Database models for verification history
 import sqlite3
 import os
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from typing import List, Dict, Any, Optional
 import json
 
@@ -66,7 +67,7 @@ class VerificationHistory:
                 verification_url, raw_data
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
-            datetime.utcnow().isoformat(),
+            datetime.now(ZoneInfo("Asia/Kolkata")).isoformat(),
             data.get('filename'),
             extracted.get('student_name'),
             extracted.get('issuer'),

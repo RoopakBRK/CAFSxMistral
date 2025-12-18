@@ -1,94 +1,196 @@
-import React from 'react';
+'use client';
+
+import React, { useEffect, useState } from 'react';
+import { CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
 import styles from './profile.module.css';
+import { historyService } from '@/services/api';
+import { HistoryRecord, VerificationStats } from '@/types/history';
 
 export default function UserProfile() {
+    const [stats, setStats] = useState<VerificationStats | null>(null);
+    const [recentActivity, setRecentActivity] = useState<HistoryRecord[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        loadData();
+    }, []);
+
+    /* -------------------------
+       Helpers (DO NOT TOUCH UI)
+    ------------------------- */
+
+    const isTrue = (v: any) => v === true || v === 1;
+
+    const loadData = async () => {
+        try {
+            setLoading(true);
+            const [statsRes, historyRes] = await Promise.all([
+                historyService.getVerificationStats(),
+                historyService.getRecentActivity(5)
+            ]);
+
+            setStats(statsRes.stats);
+            setRecentActivity(historyRes.verifications);
+        } catch (error) {
+            console.error('Failed to load profile data:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const formatTimeAgo = (timestamp: string) => {
+        const now = new Date();
+        const then = new Date(timestamp);
+        const diffMs = now.getTime() - then.getTime();
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMins / 60);
+        const diffDays = Math.floor(diffHours / 24);
+
+        if (diffMins < 1) return 'Just now';
+        if (diffMins < 60) return `${diffMins} min${diffMins > 1 ? 's' : ''} ago`;
+        if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+        if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+        return then.toLocaleDateString();
+    };
+
+    const getActivityTitle = (record: HistoryRecord) =>
+        isTrue(record.is_verified) ? 'Verified' : 'Unverified';
+
+    const getActivityDescription = (record: HistoryRecord) => {
+        if (isTrue(record.is_verified)) {
+            switch (record.verification_method) {
+                case 'dom_text_match':
+                    return 'Certificate details matched with issuer records';
+                case 'qr_code':
+                    return 'Certificate verified using QR code';
+                case 'blockchain':
+                    return 'Certificate verified on blockchain';
+                case 'manual_review':
+                    return 'Verified after manual review';
+                case 'ai_text_match':
+                    return 'Certificate content verified using AI';
+                default:
+                    return 'Certificate verified successfully';
+            }
+        }
+
+        if (isTrue(record.is_high_risk)) {
+            return 'Potential manipulation detected in the certificate';
+        }
+
+        return 'Certificate could not be verified';
+    };
+
+    if (loading) {
+        return (
+            <div className={styles.container}>
+                <main className={styles.mainContainer}>
+                    <div className="text-center py-12">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600 mx-auto"></div>
+                        <p className="mt-4 text-slate-600">Loading profile...</p>
+                    </div>
+                </main>
+            </div>
+        );
+    }
+
     return (
         <div className={styles.container}>
             <main className={styles.mainContainer}>
-                
-                <div className={styles.pageHeader}>
-                    <h1 className={styles.pageTitle}>Profile</h1>
-                    <p className={styles.pageSubtitle}>Overview of your verification status and activity.</p>
-                </div>
 
                 {/* Candidate Info Block */}
-                <div className={styles.candidateInfoBlock} style={{ marginBottom: '2rem' }}>
-                    <div className={styles.avatar}>
-                            R
-                    </div>
+                <div className={styles.candidateInfoBlock}>
+                    <div className={styles.avatar}>R</div>
                     <div className={styles.candidateDetails}>
-                         <div className={styles.candidateNameLarge}>John Doe</div>
-                         <div className={styles.candidateDobLarge}>DOB: 28 March 1995</div>
+                        <div className={styles.candidateNameLarge}>Roopak Krishna</div>
+                        <div className={styles.candidateDobLarge}>
+                            Certificate Verification System
+                        </div>
                     </div>
                 </div>
 
+                {/* Stats Grid (UNCHANGED UI) */}
                 <div className={styles.statsGrid}>
-                    
                     <div className={`${styles.statCard} ${styles.cardVerified}`}>
-                        <div className={styles.iconCircle}>
-                            <svg className={styles.svg} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                        </div>
                         <div className={styles.statLabel}>Verified</div>
-                        <div className={styles.statValue}>10</div>
+                        <div className={styles.statValue}>{stats?.verified_count || 0}</div>
                     </div>
 
                     <div className={`${styles.statCard} ${styles.cardUnverified}`}>
-                        <div className={styles.iconCircle}>
-                            <svg className={styles.svg} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-                        </div>
                         <div className={styles.statLabel}>Unverified</div>
-                        <div className={styles.statValue}>5</div>
+                        <div className={styles.statValue}>{stats?.unverified_count || 0}</div>
                     </div>
 
                     <div className={`${styles.statCard} ${styles.cardPending}`}>
-                        <div className={styles.iconCircle}>
-                            <svg className={styles.svg} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                        </div>
-                        <div className={styles.statLabel}>Pending</div>
-                        <div className={styles.statValue}>3</div>
+                        <div className={styles.statLabel}>Last 24h</div>
+                        <div className={styles.statValue}>{stats?.last_24h || 0}</div>
                     </div>
 
                     <div className={`${styles.statCard} ${styles.totalCard}`}>
                         <div className={styles.statLabel}>Total Certificates</div>
-                        <div className={styles.statValue}>18</div>
+                        <div className={styles.statValue}>{stats?.total_verifications || 0}</div>
                     </div>
-
                 </div>
 
+                {/* Recent Activity Table (UI SAME + SERIAL NUMBERS) */}
                 <div className={styles.tableContainer}>
                     <div className={styles.tableHeader}>
                         <h3 className={styles.tableTitle}>Recent User Activity Logs</h3>
-                        <a href="#" className={styles.viewAllBtn}>View All</a>
+                        <a href="/recent-activity" className={styles.viewAllBtn}>View All</a>
                     </div>
+
                     <table className={styles.table}>
                         <thead>
                             <tr className={styles.tr}>
+                                <th className={styles.th}>#</th>
                                 <th className={styles.th}>Activity</th>
                                 <th className={`${styles.th} ${styles.colDesc}`}>Description</th>
                                 <th className={styles.th} style={{ textAlign: 'right' }}>Time</th>
                             </tr>
                         </thead>
+
                         <tbody>
-                            <tr className={styles.tr}>
-                                <td className={`${styles.td} ${styles.colAction}`}>Verified Certificate #8839</td>
-                                <td className={`${styles.td} ${styles.colDesc}`}>Advanced AI check completed successfully</td>
-                                <td className={`${styles.td} ${styles.colTime}`}>24 mins ago</td>
-                            </tr>
-                            <tr className={styles.tr}>
-                                <td className={`${styles.td} ${styles.colAction}`}>Upload Failed</td>
-                                <td className={`${styles.td} ${styles.colDesc}`}>Image resolution too low for processing</td>
-                                <td className={`${styles.td} ${styles.colTime}`}>2 hours ago</td>
-                            </tr>
-                            <tr className={styles.tr}>
-                                <td className={`${styles.td} ${styles.colAction}`}>Pending Verification</td>
-                                <td className={`${styles.td} ${styles.colDesc}`}>Manual review required for document #3321</td>
-                                <td className={`${styles.td} ${styles.colTime}`}>5 hours ago</td>
-                            </tr>
-                            <tr className={styles.tr}>
-                                <td className={`${styles.td} ${styles.colAction}`}>Verified Certificate #1029</td>
-                                <td className={`${styles.td} ${styles.colDesc}`}>Instant analysis successful</td>
-                                <td className={`${styles.td} ${styles.colTime}`}>1 day ago</td>
-                            </tr>
+                            {recentActivity.length === 0 ? (
+                                <tr className={styles.tr}>
+                                    <td colSpan={4} className={styles.td} style={{ textAlign: 'center', padding: '2rem' }}>
+                                        No recent activity
+                                    </td>
+                                </tr>
+                            ) : (
+                                recentActivity.map((record, index) => (
+                                    <tr key={record.id} className={styles.tr}>
+                                        
+                                        {/* SERIAL NUMBER */}
+                                        <td className={styles.td}>
+                                            {index + 1}
+                                        </td>
+
+                                        <td className={`${styles.td} ${styles.colAction}`}>
+                                            <div className="flex items-center gap-2">
+                                                {isTrue(record.is_verified) ? (
+                                                    <CheckCircle className="w-4 h-4 text-green-600 inline" />
+                                                ) : (
+                                                    <XCircle className="w-4 h-4 text-red-600 inline" />
+                                                )}
+
+                                                {isTrue(record.is_high_risk) && (
+                                                    <AlertTriangle className="w-4 h-4 text-orange-600 inline" />
+                                                )}
+
+                                                <span>{getActivityTitle(record)}</span>
+                                            </div>
+                                        </td>
+
+                                        <td className={`${styles.td} ${styles.colDesc}`}>
+                                            {getActivityDescription(record)}
+                                        </td>
+
+                                        <td className={`${styles.td} ${styles.colTime}`}>
+                                            {formatTimeAgo(record.timestamp)}
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
                         </tbody>
                     </table>
                 </div>

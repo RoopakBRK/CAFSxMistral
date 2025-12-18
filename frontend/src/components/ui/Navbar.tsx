@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ShieldCheck, Menu, X, Activity } from 'lucide-react';
+import { ShieldCheck, Menu, X } from 'lucide-react';
 
 
 export default function Navbar() {
@@ -54,13 +54,6 @@ export default function Navbar() {
               Verify
             </Link>
             <Link
-              href="/recent-activity"
-              className="inline-flex items-center gap-2 text-sm font-medium text-slate-700 hover:text-orange-500 transition-colors"
-            >
-              <Activity className="w-4 h-4" />
-              Activity
-            </Link>
-            <Link
               href="/#about"
               className="text-sm font-medium text-slate-700 hover:text-orange-500 transition-colors"
             >
@@ -106,14 +99,7 @@ export default function Navbar() {
             >
               Verify
             </Link>
-            <Link 
-              href="/recent-activity"
-              className="flex items-center gap-2 px-4 py-3 text-slate-700 hover:bg-slate-100 hover:text-orange-500 rounded-lg transition-colors font-medium"
-              onClick={() => setIsOpen(false)}
-            >
-              <Activity className="w-5 h-5" />
-              Recent Activity
-            </Link>
+            
             <Link
               href="/#about"
               className="block px-4 py-3 text-slate-700 hover:bg-slate-100 hover:text-orange-500 rounded-lg transition-colors font-medium"
@@ -123,7 +109,7 @@ export default function Navbar() {
             </Link>
             <Link
               href="/profile"
-              className="block w-full text-center px-4 py-3 bg-orange-600 text-white rounded-lg font-bold hover:bg-orange-700 transition-colors mt-2"
+              className="block w-full text-center px-4 py-3 bg-orange-600 text-white rounded-lg font-bold hover:bg-orange-700 transition-colors mt-5"
               onClick={() => setIsOpen(false)}
             >
               Profile

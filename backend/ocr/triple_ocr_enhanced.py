@@ -1,6 +1,6 @@
 """
-Triple OCR System with PaddleOCR Fallback
-Runs EasyOCR + Mistral + Tesseract in parallel, falls back to PaddleOCR if no verified link found
+Enhanced Triple OCR with PaddleOCR Fallback
+Uses SimplePaddleOCR wrapper for correct v3.3.2 format handling
 """
 
 import logging
@@ -8,6 +8,7 @@ from typing import Dict, Any, List
 from ocr.easy_ocr_simple import SimpleEasyOCR
 from ocr.mistral_ocr_enhanced import EnhancedMistralOCR
 from ocr.tesseract_ocr import TesseractOCR
+from ocr.paddle_ocr_simple import SimplePaddleOCR
 from mistralai import Mistral
 import os
 import re
@@ -15,90 +16,71 @@ import re
 logger = logging.getLogger(__name__)
 
 
-class TripleOCR:
-    """Runs 3 OCR engines, returns all results independently, with PaddleOCR fallback"""
+class TripleOCREnhanced:
+    """Runs 3 OCR engines, with PaddleOCR fallback when verification fails"""
     
     def __init__(self):
         self.easy_ocr = SimpleEasyOCR()
         self.mistral_ocr = EnhancedMistralOCR()
         self.tesseract_ocr = TesseractOCR()
         
-        # Initialize PaddleOCR lazily (only when needed)
+        # Initialize PaddleOCR lazily
         self.paddle_ocr = None
         
-        # Mistral client for structuring raw text
+        # Mistral client for structuring
         api_key = os.getenv("MISTRAL_API_KEY")
         self.mistral_client = Mistral(api_key=api_key) if api_key else None
         
-        logger.info("[INFO] Triple OCR initialized (EasyOCR + Mistral + Tesseract + PaddleOCR fallback)")
+        logger.info("[INFO] Enhanced Triple OCR initialized (+ PaddleOCR fallback)")
     
     def _init_paddle_ocr(self):
-        """Lazy initialization of PaddleOCR"""
+        """Lazy load PaddleOCR"""
         if self.paddle_ocr is None:
             try:
-                from paddleocr import PaddleOCR
-                self.paddle_ocr = PaddleOCR(use_angle_cls=True, lang='en', show_log=False)
-                logger.info("[INFO] PaddleOCR initialized")
+                self.paddle_ocr = SimplePaddleOCR()
+                logger.info("[INFO] PaddleOCR fallback ready")
             except Exception as e:
-                logger.error(f"[ERROR] Failed to initialize PaddleOCR: {e}")
-                self.paddle_ocr = False  # Mark as failed to avoid retry
+                logger.error(f"[ERROR] PaddleOCR init failed: {e}")
+                self.paddle_ocr = False
     
-    def _extract_urls(self, text: str) -> List[str]:
-        """Extract all URLs from text"""
-        if not text:
-            return []
+    def _extract_and_validate_urls(self, structured_data: Dict[str, Any]) -> List[str]:
+        """Extract and validate URLs"""
+        urls = structured_data.get('urls', [])
         
-        # Pattern for URLs
-        url_pattern = r'https?://(?:[a-zA-Z0-9]|[-._~:/?#\[\]@!$&\'()*+,;=])+|(?:www\.)[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?(?:\.[a-zA-Z]{2,})+'
-        urls = re.findall(url_pattern, text, re.IGNORECASE)
+        if isinstance(urls, dict):
+            urls = list(urls.values())
         
-        # Also check structured data for URLs
-        return list(set(urls))  # Remove duplicates
+        valid_urls = []
+        url_pattern = r'https?://(?:[a-zA-Z0-9]|[-._~:/?#\[\]@!$&\'()*+,;=])+'
+        
+        for url in urls:
+            if not url:
+                continue
+            
+            if re.match(url_pattern, str(url), re.IGNORECASE):
+                if any(tld in str(url).lower() for tld in ['.com', '.org', '.edu', '.net', '.gov', '.io']):
+                    valid_urls.append(url)
+        
+        return valid_urls
     
-    def _verify_link(self, url: str) -> bool:
-        """
-        Verify if a URL looks valid
-        Add your custom verification logic here (e.g., check format, test accessibility)
-        """
-        if not url or len(url) < 10:
-            return False
-        
-        # Basic validation
-        valid_patterns = [
-            r'^https?://',  # Starts with http:// or https://
-            r'\.com|\.org|\.edu|\.net|\.gov',  # Has valid TLD
-        ]
-        
-        return any(re.search(pattern, url, re.IGNORECASE) for pattern in valid_patterns)
-    
-    def _has_verified_links(self, results: List[Dict[str, Any]]) -> bool:
-        """Check if any of the OCR results contain verified links"""
+    def _has_valid_verification_url(self, results: List[Dict[str, Any]]) -> bool:
+        """Check if any result has valid URLs"""
         for result in results:
             if not result.get('success'):
                 continue
             
             structured = result.get('structured_data', {})
+            valid_urls = self._extract_and_validate_urls(structured)
             
-            # Check URLs in structured data
-            urls = structured.get('urls', [])
-            if isinstance(urls, list):
-                for url in urls:
-                    if self._verify_link(url):
-                        logger.info(f"[INFO] Verified link found in {result['engine']}: {url}")
-                        return True
-            
-            # Check raw text preview
-            raw_text = result.get('raw_text_preview', '')
-            extracted_urls = self._extract_urls(raw_text)
-            for url in extracted_urls:
-                if self._verify_link(url):
-                    logger.info(f"[INFO] Verified link found in {result['engine']} raw text: {url}")
-                    return True
+            if valid_urls:
+                logger.info(f"[INFO] {result['engine']} found {len(valid_urls)} valid URL(s)")
+                return True
         
+        logger.warning("[WARNING] No valid URLs in any OCR result")
         return False
     
     def _structure_raw_text(self, raw_text: str, engine_name: str) -> Dict[str, Any]:
-        """Use Mistral to structure raw OCR text"""
+        """Use Mistral to structure raw text"""
         if not self.mistral_client or not raw_text:
             return {}
         
@@ -118,14 +100,16 @@ Return JSON:
   "issuer": "Organization",
   "course_name": "Course name",
   "completion_date": "YYYY-MM-DD",
-  "certificate_ids": ["All IDs - be careful: 7 not Z, 0 not O"],
-  "urls": ["All URLs - fix spaces like 'ude . my' to 'https://ude.my'"],
+  "certificate_ids": ["All IDs - carefully: 7 not Z, 0 not O, J not missing"],
+  "urls": ["All URLs - for Coursera use full format: https://www.coursera.org/account/accomplishments/verify/{{ID}}"],
   "instructor": "Instructor",
   "duration": "Duration"
 }}
 
-CRITICAL: Read certificate IDs and URLs character-by-character carefully.
-Common OCR mistakes: 7↔Z, 0↔O, 1↔I, 5↔S, 8↔B
+CRITICAL:
+- Read IDs character-by-character: 7≠Z, 0≠O, 1≠I, J≠missing
+- For Coursera, use FULL URL: https://www.coursera.org/account/accomplishments/verify/{{ID}}
+- Fix spaces in URLs
 
 Return ONLY JSON."""
                 }],
@@ -134,11 +118,11 @@ Return ONLY JSON."""
             
             return json.loads(response.choices[0].message.content)
         except Exception as e:
-            logger.error(f"[ERROR] Structuring {engine_name} failed: {e}")
+            logger.error(f"[ERROR] Structuring failed: {e}")
             return {}
     
-    def _run_paddle_ocr(self, image_path: str) -> Dict[str, Any]:
-        """Run PaddleOCR extraction"""
+    def _run_paddle_fallback(self, image_path: str) -> Dict[str, Any]:
+        """Run PaddleOCR as fallback"""
         self._init_paddle_ocr()
         
         if not self.paddle_ocr or self.paddle_ocr is False:
@@ -150,72 +134,66 @@ Return ONLY JSON."""
                 "confidence": 0.0
             }
         
+        logger.info("[FALLBACK] Running PaddleOCR...")
+        
         try:
-            logger.info("[FALLBACK] Running PaddleOCR...")
-            result = self.paddle_ocr.ocr(image_path, cls=True)
+            paddle_result = self.paddle_ocr.extract_text(image_path)
             
-            if not result or not result[0]:
+            if not paddle_result.get("success"):
+                logger.error(f"[FALLBACK FAILED] {paddle_result.get('error')}")
                 return {
                     "engine": "paddleocr",
                     "success": False,
-                    "error": "No text detected",
+                    "error": paddle_result.get("error"),
                     "structured_data": {},
-                    "confidence": 0.0
+                    "confidence": 0.0,
+                    "is_fallback": True
                 }
             
-            # Extract text and confidence
-            raw_text = ''
-            confidences = []
-            
-            for line in result[0]:
-                text = line[1][0]
-                confidence = line[1][1]
-                raw_text += text + ' '
-                confidences.append(confidence)
-            
-            avg_confidence = sum(confidences) / len(confidences) if confidences else 0.0
+            raw_text = paddle_result.get("raw_text", "")
+            logger.info(f"[FALLBACK] PaddleOCR extracted: {len(raw_text)} chars")
+            logger.info(f"[FALLBACK] Preview: {raw_text[:200]}")
             
             # Structure the text
             structured = self._structure_raw_text(raw_text, "PaddleOCR")
             
-            logger.info(f"[INFO] PaddleOCR: {structured.get('student_name')}, {structured.get('issuer')}")
+            if structured:
+                logger.info(f"[FALLBACK] Structured: {structured.get('student_name')}, {structured.get('issuer')}")
+                urls = self._extract_and_validate_urls(structured)
+                if urls:
+                    logger.info(f"[FALLBACK SUCCESS] ✅ PaddleOCR found {len(urls)} URL(s): {urls}")
+                else:
+                    logger.warning("[FALLBACK] ⚠️ PaddleOCR extracted data but no valid URLs")
             
             return {
                 "engine": "paddleocr",
                 "success": True,
                 "structured_data": structured,
-                "confidence": avg_confidence,
+                "confidence": paddle_result.get("confidence", 0.0),
                 "raw_text_preview": raw_text[:300],
-                "total_lines": len(result[0])
+                "total_lines": paddle_result.get("total_lines", 0),
+                "is_fallback": True
             }
             
         except Exception as e:
-            logger.error(f"[ERROR] PaddleOCR failed: {e}")
+            logger.error(f"[FALLBACK ERROR] {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             return {
                 "engine": "paddleocr",
                 "success": False,
                 "error": str(e),
                 "structured_data": {},
-                "confidence": 0.0
+                "confidence": 0.0,
+                "is_fallback": True
             }
     
     async def extract_all(self, image_path: str) -> List[Dict[str, Any]]:
-        """
-        Extract with all 3 engines, return list of results
-        If no verified link found, run PaddleOCR as fallback
-        
-        Returns:
-            [
-                {"engine": "easyocr", "success": True, "structured_data": {...}},
-                {"engine": "mistral", "success": True, "structured_data": {...}},
-                {"engine": "tesseract", "success": True, "structured_data": {...}},
-                {"engine": "paddleocr", "success": True, "structured_data": {...}, "is_fallback": True}  # Only if needed
-            ]
-        """
+        """Extract with all engines + PaddleOCR fallback if needed"""
         
         results = []
         
-        # ===== ENGINE 1: EasyOCR =====
+        # === ENGINE 1: EasyOCR ===
         logger.info("[OCR 1/3] Running EasyOCR...")
         easy_result = self.easy_ocr.extract_text(image_path)
         
@@ -238,13 +216,13 @@ Return ONLY JSON."""
             results.append({
                 "engine": "easyocr",
                 "success": False,
-                "error": easy_result.get("error", "Unknown error"),
+                "error": easy_result.get("error"),
                 "structured_data": {},
                 "confidence": 0.0
             })
         
-        # ===== ENGINE 2: Mistral (2-pass) =====
-        logger.info("[OCR 2/3] Running Mistral OCR (2-pass zoom)...")
+        # === ENGINE 2: Mistral ===
+        logger.info("[OCR 2/3] Running Mistral OCR...")
         mistral_result = self.mistral_ocr.extract_certificate_data(image_path)
         
         if mistral_result.get("success"):
@@ -260,17 +238,17 @@ Return ONLY JSON."""
             
             logger.info(f"[INFO] Mistral: {structured.get('student_name')}, {structured.get('issuer')}")
         else:
-            logger.warning("[WARNING] Mistral OCR failed")
+            logger.warning("[WARNING] Mistral failed")
             results.append({
                 "engine": "mistral",
                 "success": False,
-                "error": mistral_result.get("error", "Unknown error"),
+                "error": mistral_result.get("error"),
                 "structured_data": {},
                 "confidence": 0.0
             })
         
-        # ===== ENGINE 3: Tesseract =====
-        logger.info("[OCR 3/3] Running Tesseract OCR...")
+        # === ENGINE 3: Tesseract ===
+        logger.info("[OCR 3/3] Running Tesseract...")
         tesseract_result = self.tesseract_ocr.extract_text(image_path)
         
         if tesseract_result.get("success"):
@@ -292,26 +270,27 @@ Return ONLY JSON."""
             results.append({
                 "engine": "tesseract",
                 "success": False,
-                "error": tesseract_result.get("error", "Unknown error"),
+                "error": tesseract_result.get("error"),
                 "structured_data": {},
                 "confidence": 0.0
             })
         
         successful = sum(1 for r in results if r['success'])
-        logger.info(f"[TRIPLE OCR] Complete: {successful}/3 engines succeeded")
+        logger.info(f"[TRIPLE OCR] {successful}/3 engines succeeded")
         
-        # ===== CHECK FOR VERIFIED LINKS =====
-        if not self._has_verified_links(results):
-            logger.warning("[WARNING] No verified links found in any result - activating PaddleOCR fallback")
-            paddle_result = self._run_paddle_ocr(image_path)
-            paddle_result['is_fallback'] = True
+        # === PADDLEOCR FALLBACK ===
+        if not self._has_valid_verification_url(results):
+            logger.warning("="*80)
+            logger.warning("[CRITICAL] NO VALID URLS - ACTIVATING PADDLEOCR FALLBACK")
+            logger.warning("="*80)
+            
+            paddle_result = self._run_paddle_fallback(image_path)
             results.append(paddle_result)
             
             if paddle_result['success']:
                 successful += 1
-                logger.info(f"[FALLBACK SUCCESS] PaddleOCR found data: {paddle_result['structured_data'].get('student_name')}")
         else:
-            logger.info("[INFO] Verified link(s) found - PaddleOCR fallback not needed")
+            logger.info("[INFO] Valid URLs found - PaddleOCR not needed")
         
         logger.info(f"[FINAL] {successful}/{len(results)} total engines succeeded")
         

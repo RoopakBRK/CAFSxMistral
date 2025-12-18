@@ -18,18 +18,19 @@
     /* Orange-700 */
     --border-color: #e5e7eb;
     --text-gray: #6b7280;
-    padding-top: 2rem;
+    /* padding-top: 2rem; */
     /* Added padding since navbar is no longer here */
 }
 
 /* --- Main Content --- */
 .mainContainer {
     max-width: 1200px;
-    margin: 2.5rem auto;
+    margin: 0.25rem auto;
     padding: 0 1.5rem;
 }
 
 .pageHeader {
+    margin-top: 1rem;
     margin-bottom: 2rem;
 }
 
@@ -49,7 +50,8 @@
 }
 
 .candidateInfoBlock {
-    margin-top: 1rem;
+    margin-top: 0.75rem;
+    margin-bottom: 2.5rem;
     display: flex;
     align-items: center;
     gap: 12px;

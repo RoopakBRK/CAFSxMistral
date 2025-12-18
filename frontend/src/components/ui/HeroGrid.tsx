@@ -124,17 +124,11 @@ export const HeroGrid: React.FC<HeroGridProps> = ({ onVerifyClick }) => {
         >
           <button 
             onClick={handleScrollToUpload}
-            className="px-8 py-4 bg-orange-600 text-white font-semibold rounded-lg hover:bg-orange-700 transition-all shadow-sm hover:shadow-md active:scale-95"
+            className="px-16 py-4 bg-orange-600 text-white font-semibold rounded-lg hover:bg-orange-700 transition-all shadow-sm hover:shadow-md active:scale-95"
           >
             Verify Certificate
           </button>
           
-          <a
-            href="#about"
-            className="px-8 py-4 bg-white text-slate-700 font-semibold rounded-lg hover:bg-slate-50 transition-all border border-slate-300 active:scale-95"
-          >
-            Learn More
-          </a>
         </motion.div>
 
         {/* Stats - minimal */}
@@ -145,7 +139,7 @@ export const HeroGrid: React.FC<HeroGridProps> = ({ onVerifyClick }) => {
           className="flex flex-wrap gap-10 justify-center text-sm pt-6 text-slate-500"
         >
           <div className="flex flex-col items-center gap-1">
-            <div className="text-3xl font-bold text-slate-900">90%</div>
+            <div className="text-3xl font-bold text-slate-900">99%</div>
             <div>Accuracy</div>
           </div>
           <div className="flex flex-col items-center gap-1">

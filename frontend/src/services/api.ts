@@ -1,198 +1,95 @@
 /**
- * API Service - Certificate Verification
- * Connects to FastAPI backend
+ * API Service for certificate verification
  */
+
+import { HistoryResponse, StatsResponse, SearchResponse } from '@/types/history';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-// Type definitions matching your backend response
-export interface OCRData {
-  engines_used: string[];
-  best_engine: string;
-  easy_confidence: number | null;
-  paddle_confidence: number | null;
-}
-
-export interface ExtractedData {
-  student_name: string | null;
-  issuer: string | null;
-  course_name: string | null;
-  completion_date: string | null;
-  certificate_ids: any;
-  urls: any;
-}
-
-export interface VerificationData {
-  is_verified: boolean;
-  trusted_domain: boolean;
-  confidence_score: number;
-  method: string;
-  message: string;
-  verification_url: string | null;
-}
-
-export interface BackendResponse {
-  success: boolean;
-  filename: string;
-  data: {
-    ocr: OCRData;
-    extracted_data: ExtractedData;
-    verification: VerificationData;
-  };
-}
-
-// Your existing frontend types (keep these for compatibility)
 export interface CertificateAnalysisResponse {
   filename: string;
-  final_verdict: 'VERIFIED' | 'UNVERIFIED' | 'ERROR';
+  final_verdict: string;
   extraction: {
-    candidate_name: string | null;
-    issuer_name: string | null;
-    issuer_org: string | null;
-    issuer_url: string | null;
-    certificate_id: string | null;
+    candidate_name: string;
+    issuer: string;
+    course_name?: string;
+    completion_date?: string;
+    certificate_id?: string;
   };
   verification: {
     is_verified: boolean;
-    trusted_domain: boolean;
-    message: string;
-    confidence_score?: number;
-    method?: string;
-    verification_url?: string | null;
+    confidence: number;
+    method: string;
+    details: string;
   };
   forensics: {
-    is_high_risk: boolean;
-    status: string;
+    is_manipulated: boolean;
     manipulation_score: number;
+    anomalies: string[];
   };
+}
+
+/**
+ * Upload and verify a certificate
+ */
+export async function uploadCertificate(file: File): Promise<CertificateAnalysisResponse> {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await fetch(`${API_BASE_URL}/api/v1/verify`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    throw new Error(`Verification failed: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  
+  // Convert backend format to frontend format
+  return convertToFrontendFormat(data);
 }
 
 /**
  * Convert backend response to frontend format
  */
-function convertToFrontendFormat(backendResponse: BackendResponse): CertificateAnalysisResponse {
-  const { data, filename } = backendResponse;
-  
+function convertToFrontendFormat(backendData: any): CertificateAnalysisResponse {
+  const extractedData = backendData.data?.extracted_data || {};
+  const verification = backendData.data?.verification || {};
+  const forensics = backendData.data?.forensics || {};
+
   return {
-    filename,
-    final_verdict: data.verification.is_verified ? 'VERIFIED' : 'UNVERIFIED',
+    filename: backendData.filename || 'unknown',
+    final_verdict: backendData.data?.final_verdict || (verification.is_verified ? 'VERIFIED' : 'UNVERIFIED'),
     extraction: {
-      candidate_name: data.extracted_data.student_name,
-      issuer_name: data.extracted_data.issuer,
-      issuer_org: data.extracted_data.issuer,
-      issuer_url: Array.isArray(data.extracted_data.urls) 
-        ? data.extracted_data.urls[0] 
-        : (typeof data.extracted_data.urls === 'object' && data.extracted_data.urls !== null)
-          ? Object.values(data.extracted_data.urls)[0] as string
-          : null,
-      certificate_id: Array.isArray(data.extracted_data.certificate_ids)
-        ? data.extracted_data.certificate_ids[0]
-        : (typeof data.extracted_data.certificate_ids === 'object' && data.extracted_data.certificate_ids !== null)
-          ? Object.values(data.extracted_data.certificate_ids)[0] as string
-          : null,
+      candidate_name: extractedData.student_name || 'Unknown',
+      issuer: extractedData.issuer || 'Unknown',
+      course_name: extractedData.course_name,
+      completion_date: extractedData.completion_date,
+      certificate_id: extractedData.certificate_ids?.[0],
     },
     verification: {
-      is_verified: data.verification.is_verified,
-      trusted_domain: data.verification.trusted_domain,
-      message: data.verification.message,
-      confidence_score: data.verification.confidence_score,
-      method: data.verification.method,
-      verification_url: data.verification.verification_url,
+      is_verified: verification.is_verified || false,
+      confidence: verification.confidence_score || 0,
+      method: verification.method || 'unknown',
+      details: verification.message || 'No details available',
     },
     forensics: {
-      is_high_risk: !data.verification.is_verified,
-      status: data.verification.is_verified ? 'No Issues Detected' : 'Verification Failed',
-      manipulation_score: data.verification.is_verified ? 0 : 0.5,
+      is_manipulated: forensics.is_high_risk || false,
+      manipulation_score: forensics.manipulation_score || 0,
+      anomalies: forensics.anomalies_detected || [],
     },
   };
 }
 
-/**
- * Upload certificate for verification
- */
-async function uploadCertificate(file: File): Promise<CertificateAnalysisResponse> {
-  const formData = new FormData();
-  formData.append('file', file);
-
-  try {
-    const response = await fetch(`${API_BASE_URL}/api/v1/verify`, {
-      method: 'POST',
-      body: formData,
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'Verification failed');
-    }
-
-    const backendResponse: BackendResponse = await response.json();
-    
-    // Convert to frontend format
-    return convertToFrontendFormat(backendResponse);
-    
-  } catch (error) {
-    console.error('Upload error:', error);
-    throw error;
-  }
-}
+// ===== HISTORY SERVICE =====
 
 /**
- * Manual verification (not implemented in backend yet)
+ * Get recent verification activity
  */
-async function manualVerify(data: { certificate_id: string; issuer_url: string }): Promise<CertificateAnalysisResponse> {
-  console.warn('Manual verification not yet implemented in backend');
-  
-  return {
-    filename: 'manual-verification',
-    final_verdict: 'UNVERIFIED',
-    extraction: {
-      candidate_name: null,
-      issuer_name: null,
-      issuer_org: null,
-      issuer_url: data.issuer_url,
-      certificate_id: data.certificate_id,
-    },
-    verification: {
-      is_verified: false,
-      trusted_domain: false,
-      message: 'Manual verification is not yet implemented',
-    },
-    forensics: {
-      is_high_risk: false,
-      status: 'Pending',
-      manipulation_score: 0,
-    },
-  };
-}
-
-/**
- * Health check
- */
-async function checkHealth(): Promise<{ status: string }> {
-  const response = await fetch(`${API_BASE_URL}/health`);
-  return await response.json();
-}
-
-export const verificationService = {
-  uploadCertificate,
-  manualVerify,
-  checkHealth,
-};
-
-/**
- * ============================================
- * HISTORY API - NEW SECTION
- * ============================================
- */
-
-import { 
-  HistoryResponse, 
-  StatsResponse, 
-  SearchResponse 
-} from '@/types/history';
-
-export async function getRecentActivity(limit: number = 10): Promise<HistoryResponse> {
-  const response = await fetch(`${API_BASE_URL}/api/v1/history/recent?limit=${limit}`);
+async function getRecentActivity(limit: number = 10): Promise<HistoryResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/history?limit=${limit}`);
   
   if (!response.ok) {
     throw new Error('Failed to fetch recent activity');
@@ -201,17 +98,23 @@ export async function getRecentActivity(limit: number = 10): Promise<HistoryResp
   return response.json();
 }
 
-export async function getVerificationStats(): Promise<StatsResponse> {
+/**
+ * Get verification statistics
+ */
+async function getVerificationStats(): Promise<StatsResponse> {
   const response = await fetch(`${API_BASE_URL}/api/v1/history/stats`);
   
   if (!response.ok) {
-    throw new Error('Failed to fetch stats');
+    throw new Error('Failed to fetch verification stats');
   }
   
   return response.json();
 }
 
-export async function searchHistory(query: string, limit: number = 20): Promise<SearchResponse> {
+/**
+ * Search verification history
+ */
+async function searchHistory(query: string, limit: number = 20): Promise<SearchResponse> {
   const response = await fetch(
     `${API_BASE_URL}/api/v1/history/search?q=${encodeURIComponent(query)}&limit=${limit}`
   );
@@ -223,9 +126,12 @@ export async function searchHistory(query: string, limit: number = 20): Promise<
   return response.json();
 }
 
-// Export history service
 export const historyService = {
   getRecentActivity,
   getVerificationStats,
   searchHistory,
+};
+
+export const verificationService = {
+  uploadCertificate,
 };
