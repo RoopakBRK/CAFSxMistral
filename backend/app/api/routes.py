@@ -1,4 +1,4 @@
-"""API Routes with Mistral OCR"""
+"""API Routes with Triple OCR Verification"""
 
 from fastapi import APIRouter, UploadFile, File, HTTPException
 import tempfile
@@ -10,18 +10,17 @@ from pipeline.complete_verifier import CompleteCertificateVerifier
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-# Initialize verifier with Mistral OCR
 _verifier = None
 
 def get_verifier():
     global _verifier
     if _verifier is None:
-        _verifier = CompleteCertificateVerifier()  # Uses Mistral OCR
+        _verifier = CompleteCertificateVerifier()
     return _verifier
 
 @router.post("/verify")
 async def verify_certificate(file: UploadFile = File(...)):
-    """Verify certificate using Mistral OCR"""
+    """Verify with ALL 3 OCR engines (EasyOCR + Mistral + Tesseract)"""
     
     allowed_types = ["image/jpeg", "image/jpg", "image/png", "application/pdf"]
     if file.content_type not in allowed_types:
@@ -29,20 +28,30 @@ async def verify_certificate(file: UploadFile = File(...)):
     
     tmp_path = None
     try:
-        # Save temporarily
         with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename)[1]) as tmp:
             content = await file.read()
             tmp.write(content)
             tmp_path = tmp.name
         
-        # Run verification with Mistral OCR
         verifier = get_verifier()
         result = await verifier.verify_certificate(tmp_path)
+        
+        best_result = result.get('best_result', {})
         
         return {
             "success": True,
             "filename": file.filename,
-            "data": result
+            "data": {
+                "ocr": {
+                    "engines_used": ["easyocr", "mistral", "tesseract"],
+                    "all_results": result.get('ocr_results', [])
+                },
+                "extracted_data": best_result.get('extracted_data', {}),
+                "forensics": result.get('forensics', {}),
+                "verification": best_result.get('verification', {}),
+                "all_verification_attempts": result.get('verification_attempts', []),
+                "summary": result.get('summary', {})
+            }
         }
     
     except Exception as e:
@@ -55,4 +64,4 @@ async def verify_certificate(file: UploadFile = File(...)):
 
 @router.get("/health")
 async def health():
-    return {"status": "healthy"}
+    return {"status": "healthy", "ocr": "triple"}

@@ -111,6 +111,11 @@ export default function UploadForm() {
               <p className="text-xs text-slate-500">
                 {(file.size / 1024 / 1024).toFixed(2)} MB
               </p>
+              <p className="text-xs text-slate-500">
+                PDF (recommended), PNG, JPG (Max 5MB)
+                <br />
+                <span className="text-blue-600 font-medium">Tip: PDF provides best results</span>
+              </p>
             </>
           ) : (
             <>

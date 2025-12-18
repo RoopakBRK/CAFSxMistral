@@ -1,6 +1,6 @@
 """
-Mistral Forensics Analyzer
-Separate module for certificate authenticity analysis
+Mistral Forensics with PDF Support
+Converts PDFs to images before analysis
 """
 
 import base64
@@ -17,50 +17,83 @@ load_dotenv()
 
 
 class MistralForensics:
-    """
-    Certificate Forensics using Mistral Vision AI
-    
-    Analyzes certificates for:
-    - Visual manipulation
-    - Authenticity markers
-    - Quality indicators
-    - Suspicious patterns
-    """
+    """Certificate Forensics with PDF conversion"""
     
     def __init__(self):
         api_key = os.getenv("MISTRAL_API_KEY")
         if not api_key:
-            raise ValueError("MISTRAL_API_KEY not found in environment")
+            raise ValueError("MISTRAL_API_KEY not found")
         
         self.client = Mistral(api_key=api_key)
         logger.info("[INFO] Mistral Forensics initialized")
     
-    def analyze_certificate(self, image_path: str) -> Dict[str, Any]:
-        """
-        Perform forensics analysis on a certificate image.
-        
-        Args:
-            image_path: Path to certificate image
+    def _convert_pdf_to_image(self, pdf_path: str) -> str:
+        """Convert PDF to image for analysis"""
+        try:
+            from pdf2image import convert_from_path
+            import tempfile
             
-        Returns:
-            Dictionary with forensics report
-        """
+            logger.info("[INFO] Converting PDF for forensics (300 DPI)...")
+            
+            images = convert_from_path(
+                pdf_path, 
+                dpi=300,
+                first_page=1, 
+                last_page=1,
+                fmt='png'
+            )
+            
+            if not images:
+                raise ValueError("PDF conversion failed")
+            
+            temp_image = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+            images[0].save(temp_image.name, 'PNG', quality=100)
+            temp_image.close()
+            
+            return temp_image.name
+            
+        except ImportError:
+            raise ImportError("pdf2image not installed. Run: pip install pdf2image")
+        except Exception as e:
+            raise Exception(f"PDF conversion failed: {e}")
+    
+    def analyze_certificate(self, image_path: str) -> Dict[str, Any]:
+        """Forensics analysis (handles PDFs by converting)"""
         
-        # Read and encode image
-        with open(image_path, "rb") as f:
-            image_base64 = base64.b64encode(f.read()).decode()
-        
-        # Determine MIME type
         file_ext = image_path.lower().split('.')[-1]
+        temp_image = None
+        
+        # Convert PDF if needed
+        if file_ext == 'pdf':
+            try:
+                temp_image = self._convert_pdf_to_image(image_path)
+                image_path = temp_image
+                file_ext = 'png'
+            except Exception as e:
+                logger.error(f"[ERROR] PDF conversion failed: {e}")
+                return {
+                    "success": False,
+                    "error": f"PDF conversion for forensics failed: {str(e)}",
+                    "forensics": self._default_forensics()
+                }
+        
+        # Read image
+        try:
+            with open(image_path, "rb") as f:
+                image_base64 = base64.b64encode(f.read()).decode()
+        finally:
+            # Cleanup temp file
+            if temp_image and os.path.exists(temp_image):
+                os.unlink(temp_image)
+        
         mime_type = {
             'jpg': 'image/jpeg',
             'jpeg': 'image/jpeg',
-            'png': 'image/png',
-            'pdf': 'application/pdf'
+            'png': 'image/png'
         }.get(file_ext, 'image/jpeg')
         
         try:
-            logger.info("[INFO] Running forensics analysis...")
+            logger.info("[INFO] Running forensics...")
             
             response = self.client.chat.complete(
                 model="pixtral-12b-2409",
@@ -74,79 +107,23 @@ class MistralForensics:
                             },
                             {
                                 "type": "text",
-                                "text": """You are a certificate forensics expert. Analyze this certificate image for authenticity and potential manipulation.
+                                "text": """Forensics expert: Analyze this certificate for authenticity.
 
-Return ONLY a JSON object:
-
+Return JSON:
 {
   "is_high_risk": true/false,
-  "manipulation_score": 0.0 to 1.0,
-  "anomalies_detected": ["Specific issues found"],
-  "authenticity_indicators": ["Positive signs of authenticity"],
+  "manipulation_score": 0.0-1.0,
+  "anomalies_detected": ["Specific issues"],
+  "authenticity_indicators": ["Positive signs"],
   "visual_quality": "excellent/good/fair/poor",
-  "status": "Brief summary",
-  "confidence": 0.0 to 1.0,
-  "details": "Detailed forensics report"
+  "status": "Summary",
+  "confidence": 0.0-1.0,
+  "details": "Detailed report"
 }
 
-FORENSICS CHECKLIST:
+Check: fonts, layout, logos, text quality, colors, compression, overlays, official elements, IDs/URLs, professionalism.
 
-1. Font Analysis:
-   - Are fonts consistent throughout?
-   - Professional typography or amateur?
-   - Any mismatched font sizes/styles?
-
-2. Layout & Spacing:
-   - Professional alignment?
-   - Consistent margins and spacing?
-   - Elements properly positioned?
-
-3. Logo & Graphics:
-   - Logos crisp and high-quality?
-   - Official branding present?
-   - Any pixelation or distortion?
-
-4. Text Quality:
-   - Sharp, clear text?
-   - Any blurry or re-typed sections?
-   - OCR artifacts visible?
-
-5. Color & Contrast:
-   - Uniform color palette?
-   - Natural shadows and gradients?
-   - Color mismatches or overlays?
-
-6. Compression & Artifacts:
-   - Signs of multiple compressions?
-   - JPEG artifacts around text?
-   - Unnatural edges or halos?
-
-7. Overlays & Editing:
-   - Text that looks pasted on?
-   - Inconsistent backgrounds?
-   - Clone stamp or copy-paste evidence?
-
-8. Official Elements:
-   - Seals, watermarks present?
-   - Digital signatures visible?
-   - Security features appropriate?
-
-9. ID/URL Format:
-   - Certificate IDs follow platform standards?
-   - URLs formatted correctly?
-   - Reference numbers consistent?
-
-10. Overall Assessment:
-    - Does it look professionally produced?
-    - Matches known certificate templates?
-    - Any red flags?
-
-SCORING:
-- manipulation_score: 0.0 = pristine/authentic, 1.0 = heavily manipulated
-- is_high_risk: true if score > 0.5 OR critical anomalies
-- confidence: How certain you are about the analysis
-
-Be thorough and specific. List actual observations, not generic statements."""
+Score: 0.0=pristine, 1.0=manipulated. is_high_risk=true if score>0.5."""
                             }
                         ]
                     }
@@ -156,21 +133,16 @@ Be thorough and specific. List actual observations, not generic statements."""
             
             result_text = response.choices[0].message.content
             
-            # Parse JSON
             try:
                 forensics = json.loads(result_text)
             except json.JSONDecodeError:
                 import re
                 json_match = re.search(r'\{.*\}', result_text, re.DOTALL)
-                if json_match:
-                    forensics = json.loads(json_match.group())
-                else:
-                    forensics = self._default_forensics()
+                forensics = json.loads(json_match.group()) if json_match else self._default_forensics()
             
-            # Ensure all required fields exist
             forensics = self._normalize_forensics(forensics)
             
-            logger.info(f"[INFO] Forensics complete: Risk={forensics['is_high_risk']}, Score={forensics['manipulation_score']}")
+            logger.info(f"[INFO] Forensics: Risk={forensics['is_high_risk']}, Score={forensics['manipulation_score']}")
             
             return {
                 "success": True,
@@ -178,7 +150,7 @@ Be thorough and specific. List actual observations, not generic statements."""
             }
             
         except Exception as e:
-            logger.error(f"[ERROR] Forensics analysis failed: {e}")
+            logger.error(f"[ERROR] Forensics failed: {e}")
             return {
                 "success": False,
                 "error": str(e),
@@ -186,7 +158,6 @@ Be thorough and specific. List actual observations, not generic statements."""
             }
     
     def _default_forensics(self) -> Dict[str, Any]:
-        """Default forensics response when analysis fails"""
         return {
             "is_high_risk": False,
             "manipulation_score": 0.0,
@@ -195,13 +166,12 @@ Be thorough and specific. List actual observations, not generic statements."""
             "visual_quality": "unknown",
             "status": "Analysis unavailable",
             "confidence": 0.0,
-            "details": "Forensics analysis could not be performed"
+            "details": "Could not analyze"
         }
     
     def _normalize_forensics(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Ensure all required fields exist with defaults"""
         defaults = self._default_forensics()
-        for key, default_value in defaults.items():
+        for key, value in defaults.items():
             if key not in data:
-                data[key] = default_value
+                data[key] = value
         return data

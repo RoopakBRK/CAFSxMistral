@@ -138,10 +138,8 @@ async function uploadCertificate(file: File): Promise<CertificateAnalysisRespons
 
 /**
  * Manual verification (not implemented in backend yet)
- * For now, return a mock response
  */
 async function manualVerify(data: { certificate_id: string; issuer_url: string }): Promise<CertificateAnalysisResponse> {
-  // TODO: Implement manual verification endpoint in backend
   console.warn('Manual verification not yet implemented in backend');
   
   return {
@@ -179,4 +177,55 @@ export const verificationService = {
   uploadCertificate,
   manualVerify,
   checkHealth,
+};
+
+/**
+ * ============================================
+ * HISTORY API - NEW SECTION
+ * ============================================
+ */
+
+import { 
+  HistoryResponse, 
+  StatsResponse, 
+  SearchResponse 
+} from '@/types/history';
+
+export async function getRecentActivity(limit: number = 10): Promise<HistoryResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/history/recent?limit=${limit}`);
+  
+  if (!response.ok) {
+    throw new Error('Failed to fetch recent activity');
+  }
+  
+  return response.json();
+}
+
+export async function getVerificationStats(): Promise<StatsResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/history/stats`);
+  
+  if (!response.ok) {
+    throw new Error('Failed to fetch stats');
+  }
+  
+  return response.json();
+}
+
+export async function searchHistory(query: string, limit: number = 20): Promise<SearchResponse> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/v1/history/search?q=${encodeURIComponent(query)}&limit=${limit}`
+  );
+  
+  if (!response.ok) {
+    throw new Error('Failed to search history');
+  }
+  
+  return response.json();
+}
+
+// Export history service
+export const historyService = {
+  getRecentActivity,
+  getVerificationStats,
+  searchHistory,
 };

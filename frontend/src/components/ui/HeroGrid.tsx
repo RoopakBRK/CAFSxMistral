@@ -52,7 +52,7 @@ export const HeroGrid: React.FC<HeroGridProps> = ({ onVerifyClick }) => {
     <div
       ref={containerRef}
       onMouseMove={handleMouseMove}
-      className="relative w-full h-screen flex flex-col items-center justify-center overflow-hidden bg-white"
+      className="relative w-full pt-52 pb-20 flex flex-col items-center overflow-hidden bg-white"
     >
       {/* Base grid layer */}
       <div className="absolute inset-0 z-0 opacity-[0.15]">
@@ -73,15 +73,15 @@ export const HeroGrid: React.FC<HeroGridProps> = ({ onVerifyClick }) => {
       </div>
 
       {/* Content */}
-      <div className="relative z-10 flex flex-col items-center text-center px-4 max-w-4xl mx-auto space-y-8 pointer-events-none">
-        <div className="space-y-4">
+      <div className="relative z-10 flex flex-col items-center text-center px-4 max-w-4xl mx-auto space-y-12 pointer-events-none">
+        <div className="space-y-6">
           <motion.h1 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
             className="text-5xl md:text-7xl font-bold tracking-tight text-slate-900"
           >
-            Verify Credentials with{" "}
+            Verify Credentials with{"  "}
             <span className="text-orange-600">
               Confidence
             </span>
@@ -142,7 +142,7 @@ export const HeroGrid: React.FC<HeroGridProps> = ({ onVerifyClick }) => {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.5, delay: 0.4 }}
-          className="flex flex-wrap gap-12 justify-center text-sm pt-8 text-slate-500"
+          className="flex flex-wrap gap-10 justify-center text-sm pt-6 text-slate-500"
         >
           <div className="flex flex-col items-center gap-1">
             <div className="text-3xl font-bold text-slate-900">90%</div>
@@ -158,25 +158,8 @@ export const HeroGrid: React.FC<HeroGridProps> = ({ onVerifyClick }) => {
           </div>
         </motion.div>
       </div>
-
-      {/* Scroll indicator - minimal */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.5, delay: 0.6 }}
-        className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-10"
-      >
-        <motion.div
-          animate={{ y: [0, 8, 0] }}
-          transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-          className="flex flex-col items-center gap-2 text-slate-400 cursor-pointer hover:text-slate-600 transition-colors"
-          onClick={handleScrollToUpload}
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-          </svg>
-        </motion.div>
-      </motion.div>
+      {/* subtle grid extension */}
+<div className="h-4 pointer-events-none" />
     </div>
   );
 };

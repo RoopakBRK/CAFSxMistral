@@ -17,8 +17,8 @@ export default function UserProfile() {
                             R
                     </div>
                     <div className={styles.candidateDetails}>
-                         <div className={styles.candidateNameLarge}>KeyaBRo</div>
-                         <div className={styles.candidateDobLarge}>DOB: 28 July 2005</div>
+                         <div className={styles.candidateNameLarge}>John Doe</div>
+                         <div className={styles.candidateDobLarge}>DOB: 28 March 1995</div>
                     </div>
                 </div>
 

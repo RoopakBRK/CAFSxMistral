@@ -1,5 +1,5 @@
 """
-FastAPI Application - Certificate Verification with Mistral OCR
+FastAPI Application with History tracking
 """
 
 from fastapi import FastAPI
@@ -8,11 +8,11 @@ import uvicorn
 
 app = FastAPI(
     title="Certificate Verification API",
-    description="AI-powered certificate verification with Mistral OCR",
+    description="AI-powered verification with history tracking",
     version="2.0.0"
 )
 
-# CORS for Next.js frontend
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000"],
@@ -22,20 +22,22 @@ app.add_middleware(
 )
 
 # Import routes
-from app.api import routes
-app.include_router(routes.router, prefix="/api/v1")
+from app.api import routes, history
+
+app.include_router(routes.router, prefix="/api/v1", tags=["verification"])
+app.include_router(history.router, prefix="/api/v1/history", tags=["history"])
 
 @app.get("/")
 async def root():
     return {
         "message": "Certificate Verification API v2.0",
-        "ocr_engine": "Mistral OCR",
+        "features": ["OCR", "Forensics", "Verification", "History"],
         "docs": "/docs"
     }
 
 @app.get("/health")
 async def health():
-    return {"status": "healthy", "ocr": "mistral"}
+    return {"status": "healthy"}
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
